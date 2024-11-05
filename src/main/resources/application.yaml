@@ -1,17 +1,16 @@
 server:
-  port: 8081
+  port: 8001
 spring:
   application:
     name: hmdp
   datasource:
-    driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:13306/hmdp?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC
     username: root
-    password: 123
+    password: 123456
   redis:
     host: 192.168.150.101
-    port: 6379
-    password: 123321
+    port: 16379
     lettuce:
       pool:
         max-active: 10
