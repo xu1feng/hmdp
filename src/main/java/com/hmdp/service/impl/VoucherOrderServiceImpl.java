@@ -9,6 +9,7 @@ import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.UserHolder;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +18,7 @@ import java.time.LocalDateTime;
 
 /**
  * <p>
- *  服务实现类
+ * 服务实现类
  * </p>
  *
  * @author 虎哥
@@ -33,7 +34,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     private RedisIdWorker redisIdWorker;
 
     @Override
-    @Transactional
     public Result seckillVoucher(Long voucherId) {
         // 1.查询优惠券
         SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
@@ -56,33 +56,54 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("库存不足！");
         }
 
-        // 5.扣减库存
+        Long userId = UserHolder.getUser().getId();
+        synchronized (userId.toString().intern()) {
+            // 获取代理对象（事务）
+            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+            return proxy.createVoucherOrder(voucherId, voucher);
+        }
+    }
+
+    @Transactional
+    public Result createVoucherOrder(Long voucherId, SeckillVoucher voucher) {
+        // 5.一人一单
+        Long userId = UserHolder.getUser().getId();
+
+        // 5.1 查询订单
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+
+        // 5.2 判断是否存在
+        if (count > 0) {
+            // 用户已经购买过了
+            return Result.fail("该用户已经购买过了！");
+        }
+
+        // 6.扣减库存
         boolean success = seckillVoucherService.update()
                 .setSql("stock = stock - 1") // set stock = stock - 1
                 .eq("voucher_id", voucherId)
                 .gt("stock", voucher.getStock()) // where id = ? and stock > 0
                 .update();
-        if(!success) {
+        if (!success) {
             // 扣减失败
             return Result.fail("库存不足！");
         }
 
-        // 6.创建订单
+        // 7.创建订单
         VoucherOrder voucherOrder = new VoucherOrder();
 
-        // 6.1 订单id
+        // 7.1订单id
         long orderId = redisIdWorker.nextId("order");
         voucherOrder.setId(orderId);
 
-        // 6.2 用户id
-        Long userId = UserHolder.getUser().getId();
+        // 7.2用户id
         voucherOrder.setUserId(userId);
 
-        // 6.3 代金券id
+        // 7.3 代金券id
         voucherOrder.setVoucherId(voucherId);
         save(voucherOrder);
 
-        // 7.返回订单id
+        // 8.返回订单id
         return Result.ok(orderId);
     }
 }
